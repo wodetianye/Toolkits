@@ -1,0 +1,64 @@
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.plugin)
+    id 'maven-publish'
+    id 'kotlin-android'
+}
+
+android {
+    namespace 'com.java.utils'
+    compileSdk {
+        version = release(36)
+    }
+
+    defaultConfig {
+        minSdk 30
+
+        consumerProguardFiles "consumer-rules.pro"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    publishing {
+        singleVariant('release') {
+            withSourcesJar()
+            withJavadocJar()
+        }
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+        freeCompilerArgs += [
+                '-Xjvm-default', 'enable'
+        ]
+    }
+}
+
+afterEvaluate {
+    publishing {
+        publications {
+            //创建一个名为release的Maven发布
+            release(MavenPublication) {
+                //应用发布内部版本变体的组件
+                from components.release
+                groupId = 'com.java.utils'
+                artifactId = 'toolkit'
+                version = '1.0.0'
+            }
+        }
+    }
+}
+
+dependencies {
+    implementation libs.bundles.module.library
+    implementation libs.gson
+}
