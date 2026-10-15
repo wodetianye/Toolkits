@@ -1,89 +1,120 @@
-package com.java.utils.log;
+package com.java.utils.log
 
-import android.util.Log;
+import android.util.Log
 
 /**
- * @Introduce: API.
+ * @Introduce: 日志对外 API.
  * @Author: Lww
  * @Date: 2023/10/11
- * @Description:
+ * @Description: 封装 LogUtils，对外只暴露简洁的 v / d / i / w / e 等方法.
  */
-public class Logger {
-    public static final int VERBOSE = Log.VERBOSE;
+object Logger {
+    const val VERBOSE = Log.VERBOSE
+    const val DEBUG = Log.DEBUG
+    const val INFO = Log.INFO
+    const val WARN = Log.WARN
+    const val ERROR = Log.ERROR
 
-    public static final int DEBUG = Log.DEBUG;
+    /**
+     * Verbose 日志（无 tag）。
+     *
+     * 例：Logger.v("debug message")
+     */
+    @JvmStatic
+    fun v(args: Any?) = LogUtils.verbose(args)
 
-    public static final int INFO = Log.INFO;
+    /**
+     * Verbose 日志（指定 tag）。
+     *
+     * 例：Logger.v("TAG", "debug message")
+     */
+    @JvmStatic
+    fun v(tag: String?, vararg args: Any?) = LogUtils.verbose(tag, *args)
 
-    public static final int WARN = Log.WARN;
+    @JvmStatic
+    fun d(args: Any?) = LogUtils.debug(args)
 
-    public static final int ERROR = Log.ERROR;
+    @JvmStatic
+    fun d(tag: String?, vararg args: Any?) = LogUtils.debug(tag, *args)
 
-    public static void v(Object args) {
-        LogUtils.verbose(args);
-    }
+    @JvmStatic
+    fun i(args: Any?) = LogUtils.info(args)
 
-    public static void v(String tag, Object... args) {
-        LogUtils.verbose(tag, args);
-    }
+    @JvmStatic
+    fun i(tag: String?, vararg args: Any?) = LogUtils.info(tag, *args)
 
-    public static void d(Object args) {
-        LogUtils.debug(args);
-    }
+    @JvmStatic
+    fun w(args: Any?) = LogUtils.warn(args)
 
-    public static void d(String tag, Object... args) {
-        LogUtils.debug(tag, args);
-    }
+    @JvmStatic
+    fun w(tag: String?, vararg args: Any?) = LogUtils.warn(tag, *args)
 
-    public static void i(Object args) {
-        LogUtils.info(args);
-    }
+    @JvmStatic
+    fun e(args: Any?) = LogUtils.error(args)
 
-    public static void i(String tag, Object... args) {
-        LogUtils.info(tag, args);
-    }
+    @JvmStatic
+    fun e(tag: String?, vararg args: Any?) = LogUtils.error(tag, *args)
 
-    public static void w(Object args) {
-        LogUtils.warn(args);
-    }
+    /**
+     * 日志总开关。
+     *
+     * 例：Logger.switchLog(false) -> 关闭日志
+     */
+    @JvmStatic
+    fun switchLog(logSwitch: Boolean) = LogUtils.switchLog(logSwitch)
 
-    public static void w(String tag, Object... args) {
-        LogUtils.warn(tag, args);
-    }
+    /**
+     * 设置日志级别。
+     *
+     * 例：Logger.setLogLevel(Log.WARN)
+     */
+    @JvmStatic
+    fun setLogLevel(level: Int) = LogUtils.setLogLevel(level)
 
-    public static void e(Object args) {
-        LogUtils.error(args);
-    }
+    /**
+     * 设置默认 Tag。
+     *
+     * 例：Logger.setDefaultTag("MyApp")
+     */
+    @JvmStatic
+    fun setDefaultTag(defaultTag: String?) = LogUtils.setDefaultTag(defaultTag)
 
-    public static void e(String tag, Object... args) {
-        LogUtils.error(tag, args);
-    }
+    /**
+     * 设置堆栈过滤包名。
+     *
+     * 例：Logger.setStackTraceFilter("com.yourpackage")
+     */
+    @JvmStatic
+    fun setStackTraceFilter(packageName: String?) =
+        LogUtils.setStackTraceFilter(packageName)
 
-    public static void switchLog(boolean logSwitch) {
-        LogUtils.switchLog(logSwitch);
-    }
+    /**
+     * 当前是否为 DEBUG 级别。
+     *
+     * 例：Logger.isDebugLevel() -> true
+     */
+    @JvmStatic
+    fun isDebugLevel(): Boolean = LogUtils.isDebugLevel()
 
-    public static void setLogLevel(int level) {
-        LogUtils.setLogLevel(level);
-    }
+    /**
+     * 打印当前堆栈。
+     *
+     * 例：Logger.printStackTrace("TAG", true)
+     */
+    @JvmStatic
+    fun printStackTrace(tag: String?, info: Boolean) =
+        LogUtils.printStackTrace(tag, info)
 
-    public static void setDefaultTag(String defaultTag) {
-        LogUtils.setDefaultTag(defaultTag);
-    }
+    @JvmStatic
+    fun getCurrentTagName(): String = LogUtils.getCurrentTagName()
 
-    public static void initLogUtils(boolean logSwitch, int level) {
-        LogUtils.initLogUtils(logSwitch, level);
-    }
-
-    public static String getCurrentTagName() {
-        return LogUtils.getCurrentTagName();
-    }
-
-    public static boolean isDebugLevel() {
-        return LogUtils.isDebugLevel();
-    }
-
-    public static void printStackTrace(String tag, boolean info) {
-        LogUtils.printStackTrace(tag, info);
-    }
+    /**
+     * 初始化日志工具。
+     *
+     * 例：Logger.initLogUtils(true, Log.DEBUG, "MyApp")
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun initLogUtils(logSwitch: Boolean, level: Int, tag: String? = null) =
+        LogUtils.initLogUtils(logSwitch, level, tag)
 }

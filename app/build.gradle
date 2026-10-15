@@ -5,7 +5,7 @@ plugins {
 android {
     namespace 'com.java.utils'
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
@@ -31,7 +31,9 @@ android {
 }
 
 dependencies {
+    implementation libs.activity.ktx
     implementation libs.bundles.android.library
     testImplementation libs.bundles.test.junit
     androidTestImplementation libs.bundles.android.junit
+    implementation project(':utils')
 }

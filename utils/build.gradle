@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.library)
     alias(libs.plugins.kotlin.plugin)
@@ -35,11 +37,20 @@ android {
         }
     }
 
-    kotlinOptions {
+/*    kotlinOptions {
         jvmTarget = '17'
         freeCompilerArgs += [
                 '-Xjvm-default', 'enable'
         ]
+    }*/
+
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(JvmTarget.JVM_17)
+            // 如果确实需要配置 JVM default 模式，使用新的参数
+            // 注意：需要根据你的 Kotlin 版本和需求选择正确模式
+            freeCompilerArgs.add("-jvm-default=enable")
+        }
     }
 }
 

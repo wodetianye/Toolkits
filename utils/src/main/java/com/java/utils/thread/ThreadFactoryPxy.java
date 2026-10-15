@@ -6,52 +6,42 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
- * @Introduce: 线程工厂.
+ * @Introduce: 自定义线程工厂，统一线程命名、线程组、未捕获异常处理器
  * @Author: Lww
- * @Date: 2023/10/11
+ * @Date: 2023/11/13
  * @Description:
+ * 1.自定义线程组，方便后续调试、dump线程
+ * 2.统一线程名字，便于日志定位
+ * 3.设置未捕获异常回调，打印线程崩溃堆栈
+ * 4.不返回null，超过maxNum仅打警告，避免线程池NPE崩溃
  */
 public class ThreadFactoryPxy implements ThreadFactory {
     private static final String TAG = ThreadFactoryPxy.class.getSimpleName();
-
-    private final AtomicInteger atomicInteger = new AtomicInteger();
-
+    private final AtomicInteger threadSeq = new AtomicInteger(0);
     private final String mThreadName;
-
     private final int threadMaxNum;
-
-    private final Group group;
+    private final ThreadGroup group;
 
     protected ThreadFactoryPxy(int maxNum, String threadName, String groupName) {
         threadMaxNum = maxNum;
         mThreadName = threadName;
-        group = new Group(groupName);
+        group = new ThreadGroup(groupName);
     }
 
     @Override
     public Thread newThread(Runnable r) {
-        int currentThreadNum = atomicInteger.getAndIncrement();
-        if (threadMaxNum < currentThreadNum) {
-            atomicInteger.decrementAndGet();
-            Logger.w(TAG, "The thread pool has been exceeded ! ! !");
-            return null;
-        } else {
-            Thread thread = new Thread(group, r, mThreadName + atomicInteger.get());
-            if (thread.isDaemon()) thread.setDaemon(false);
-            if (thread.getPriority() != Thread.NORM_PRIORITY) thread.setPriority(Thread.NORM_PRIORITY);
-            return thread;
+        int seq = threadSeq.getAndIncrement();
+        if (threadMaxNum < seq) {
+            Logger.w(TAG, "thread count exceed maxNum:" + threadMaxNum + ", current:" + seq);
         }
-    }
-
-    private static class Group extends ThreadGroup {
-
-        public Group(String name) {
-            super(name);
-        }
-
-        @Override
-        public void uncaughtException(Thread t, Throwable e) {
-            Logger.e(TAG, "捕获到线程异常", "thread name -> " + t.getName(), "exception -> " + e.toString());
-        }
+        // 修复：直接使用seq，不再二次get，避免线程名跳号
+        Thread thread = new Thread(group, r, mThreadName + "-" + seq);
+        thread.setDaemon(false);
+        thread.setPriority(Thread.NORM_PRIORITY);
+        // 线程未捕获异常处理器，worker线程崩溃打印完整堆栈
+        thread.setUncaughtExceptionHandler((t, e) -> {
+            Logger.e(TAG, "worker thread uncaughtException, thread will exit, threadName:" + t.getName(), e);
+        });
+        return thread;
     }
 }

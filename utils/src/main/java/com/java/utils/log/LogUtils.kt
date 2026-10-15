@@ -1,246 +1,238 @@
-package com.java.utils.log;
+package com.java.utils.log
 
-import android.util.Log;
-
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.java.utils.ConvertUtils;
+import android.util.Log
+import com.google.gson.GsonBuilder
 
 /**
- * @Introduce: 实体.
+ * @Introduce: 日志管理输出类.
  * @Author: Lww
  * @Date: 2023/10/11
- * @Description: 日志管理输出类
+ * @Description: 支持多级别日志、堆栈定位、JSON 序列化、超长日志分段.
  */
-public class LogUtils {
-    private static final int VERBOSE = Log.VERBOSE;
+internal object LogUtils {
+    private const val LOG_MAX_LENGTH = 1024 * 2
+    private const val LOG_TOTAL_LIMIT = 5 * LOG_MAX_LENGTH
 
-    private static final int DEBUG = Log.DEBUG;
+    /** 默认 Tag。 */
+    @Volatile
+    private var defaultTag: String = "App"
 
-    private static final int INFO = Log.INFO;
+    /** 日志级别，默认 DEBUG（release 建议改成 ERROR）。 */
+    @Volatile
+    private var logLevel: Int = Log.DEBUG
 
-    private static final int WARN = Log.WARN;
+    private val gson = GsonBuilder().disableHtmlEscaping().create()
 
-    private static final int ERROR = Log.ERROR;
-    /*** 默认Tag值 **/
-    private static String DEFAULT_TAG = "";
+    /** 堆栈过滤白名单，printStackTrace 只输出包含该字符串的帧。 */
+    @Volatile
+    private var stackTraceFilter: String = ""
 
-    /*** log默认输出级别 **/
-    private static int LOG_LEVEL = Log.DEBUG;
-
-    private static final int LOG_MAX_LENGTH = 1024 * 2;
-
-    private static final Gson gson = new GsonBuilder().disableHtmlEscaping().create();
-
-    public static void setDefaultTag(String defaultTag) {
-        if (ConvertUtils.isEmpty(defaultTag)) DEFAULT_TAG = getDefaultTag();
-        else DEFAULT_TAG = defaultTag;
-    }
-
-    protected static String getCurrentTagName() {
-        if (ConvertUtils.isEmpty(DEFAULT_TAG)) return getDefaultTag();
-        return DEFAULT_TAG;
-    }
+    // ====================== 配置API ======================
 
     /**
-     * Set log print level/
+     * 设置默认 Tag。
      *
-     * @param level log level
+     * 例：setDefaultTag("MyApp")
      */
-    protected static void setLogLevel(int level) {
-        LOG_LEVEL = level;
-    }
-
-    protected static boolean isDebugLevel() {
-        return !(DEBUG < LOG_LEVEL);
+    fun setDefaultTag(tag: String?) {
+        defaultTag = if (tag.isNullOrEmpty()) "App" else tag
     }
 
     /**
-     * Log switch.
+     * 设置日志级别。
      *
-     * @param logSwitch log switch true 开、false 关
+     * 例：setLogLevel(Log.WARN)
      */
-    protected static void switchLog(boolean logSwitch) {
-        LOG_LEVEL = logSwitch ? Log.DEBUG : Log.ERROR;
+    fun setLogLevel(level: Int) {
+        logLevel = level
     }
 
     /**
-     * @param logSwitch true 开、false 关
-     * @param level     log等级
+     * 日志总开关。
+     *
+     * 例：switchLog(false) -> 关闭所有日志输出
      */
-    protected static void initLogUtils(boolean logSwitch, int level) {
-        switchLog(logSwitch);
-        setLogLevel(level);
-        setDefaultTag(null);
+    fun switchLog(logSwitch: Boolean) {
+        logLevel = if (logSwitch) Log.VERBOSE else Log.ASSERT
     }
 
-    protected static void verbose(Object args) {
-        if (VERBOSE < LOG_LEVEL) return;
-        verbose(DEFAULT_TAG, args);
+    /**
+     * 初始化日志工具。
+     *
+     * 例：initLogUtils(true, Log.DEBUG, "MyApp")
+     */
+    fun initLogUtils(logSwitch: Boolean, level: Int, tag: String? = null) {
+        switchLog(logSwitch)
+        setLogLevel(level)
+        setDefaultTag(tag)
     }
 
-    protected static void verbose(String tag, Object... args) {
-        if (VERBOSE < LOG_LEVEL) return;
-        assembleLog(VERBOSE, tag, args);
+    fun getCurrentTagName(): String {
+        return defaultTag
     }
 
-    protected static void debug(Object args) {
-        if (DEBUG < LOG_LEVEL) return;
-        debug(DEFAULT_TAG, args);
+    /**
+     * 设置堆栈过滤包名。
+     *
+     * 例：setStackTraceFilter("com.yourpackage")
+     */
+    fun setStackTraceFilter(packageName: String?) {
+        stackTraceFilter = packageName.orEmpty()
     }
 
-    protected static void debug(String tag, Object... args) {
-        if (DEBUG < LOG_LEVEL) return;
-        assembleLog(DEBUG, tag, args);
+    /**
+     * 当前日志级别是否允许 DEBUG。
+     *
+     * 例：isDebugLevel() -> true
+     */
+    fun isDebugLevel(): Boolean = logLevel <= Log.DEBUG
+
+    // 日志输出 =================================================
+
+    fun verbose(args: Any?) = verbose(defaultTag, args)
+
+    fun verbose(tag: String?, vararg args: Any?) {
+        if (Log.VERBOSE < logLevel) return
+        assembleLog(Log.VERBOSE, tag, *args)
     }
 
+    fun debug(vararg args: Any?) = debug(defaultTag, *args)
 
-    protected static void info(Object args) {
-        if (INFO < LOG_LEVEL) return;
-        info(DEFAULT_TAG, args);
+    fun debug(tag: String?, vararg args: Any?) {
+        if (Log.DEBUG < logLevel) return
+        assembleLog(Log.DEBUG, tag, *args)
     }
 
-    protected static void info(String tag, Object... args) {
-        if (INFO < LOG_LEVEL) return;
-        assembleLog(INFO, tag, args);
+    fun info(vararg args: Any?) = info(defaultTag, *args)
+
+    fun info(tag: String?, vararg args: Any?) {
+        if (Log.INFO < logLevel) return
+        assembleLog(Log.INFO, tag, *args)
     }
 
-    protected static void warn(Object args) {
-        if (WARN < LOG_LEVEL) return;
-        warn(DEFAULT_TAG, args);
+    fun warn(vararg args: Any?) = warn(defaultTag, *args)
+
+    fun warn(tag: String?, vararg args: Any?) {
+        if (Log.WARN < logLevel) return
+        assembleLog(Log.WARN, tag, *args)
     }
 
-    protected static void warn(String tag, Object... args) {
-        if (WARN < LOG_LEVEL) return;
-        assembleLog(WARN, tag, args);
+    fun error(vararg args: Any?) = error(defaultTag, *args)
+
+    fun error(tag: String?, vararg args: Any?) {
+        if (Log.ERROR < logLevel) return
+        assembleLog(Log.ERROR, tag, *args)
     }
 
-    protected static void error(Object args) {
-        if (ERROR < LOG_LEVEL) return;
-        error(DEFAULT_TAG, args);
+    /**
+     * 打印当前堆栈（只输出包含 [stackTraceFilter] 的帧）。
+     *
+     * 例：printStackTrace("TAG", true)
+     */
+    fun printStackTrace(tag: String?, info: Boolean) {
+        val traceElements = Thread.currentThread().stackTrace ?: return
+        val sb = StringBuilder()
+        for (element in traceElements) {
+            if (element == null) continue
+            val elementStr = element.toString()
+            if (stackTraceFilter.isEmpty() || elementStr.contains(stackTraceFilter)) {
+                sb.append(elementStr).append("\n")
+            }
+        }
+        if (info) info(tag, sb.toString()) else debug(tag, sb.toString())
     }
 
-    protected static void error(String tag, Object... args) {
-        if (ERROR < LOG_LEVEL) return;
-        assembleLog(ERROR, tag, args);
+    // ====================== 核心日志组装、超长分段 ======================
+
+    private fun assembleLog(level: Int, tag: String?, vararg args: Any?) {
+        val realTag = if (tag.isNullOrEmpty()) defaultTag else tag
+        recursionLog(level, realTag, convertJson(*args))
     }
 
-    private static void printLog(int level, String tag, String msg) {
-        StringBuffer stringBuffer = getMethodName();
-        switch (level) {
-            case VERBOSE:
-                Log.v(tag, stringBuffer.append(msg).toString());
-                break;
-            case DEBUG:
-                Log.d(tag, stringBuffer.append(msg).toString());
-                break;
-            case INFO:
-                Log.i(tag, stringBuffer.append(msg).toString());
-                break;
-            case WARN:
-                Log.w(tag, stringBuffer.append(msg).toString());
-                break;
-            case ERROR:
-                Log.e(tag, stringBuffer.append(msg).toString());
-                break;
-            default:
-                break;
+    private fun recursionLog(level: Int, tag: String, json: String) {
+        if (json.isEmpty()) return
+
+        // 超过总量限制，截断并提示
+        if (json.length > LOG_TOTAL_LIMIT) {
+            printLog(level, tag, json.substring(0, LOG_TOTAL_LIMIT) + "... [truncated]")
+            return
+        }
+
+        var remaining = json
+        while (remaining.length > LOG_MAX_LENGTH) {
+            val chunk = remaining.substring(0, LOG_MAX_LENGTH)
+            printLog(level, tag, chunk)
+            remaining = remaining.substring(LOG_MAX_LENGTH)
+        }
+        if (remaining.isNotEmpty()) {
+            printLog(level, tag, remaining)
         }
     }
 
-    private static void assembleLog(int level, String tag, Object... args) {
-        if (ConvertUtils.isEmpty(tag)) tag = getDefaultTag();
-        recursionLog(level, tag, convertJson(args));
-    }
-
-    private static void recursionLog(int level, String tag, String json) {
-        if (ConvertUtils.isEmpty(json)) return;
-        if (json.length() > 5 * LOG_MAX_LENGTH) return;
-        if (LOG_MAX_LENGTH > json.length()) printLog(level, tag, json);
-        else {
-            String msg = json.substring(0, LOG_MAX_LENGTH);
-            printLog(level, tag, msg);
-            String newJson = json.replace(msg, "");
-            recursionLog(level, tag, newJson);
+    private fun printLog(level: Int, tag: String, msg: String) {
+        val prefix = getMethodName()
+        val fullMsg = prefix + msg
+        when (level) {
+            Log.VERBOSE -> Log.v(tag, fullMsg)
+            Log.DEBUG -> Log.d(tag, fullMsg)
+            Log.INFO -> Log.i(tag, fullMsg)
+            Log.WARN -> Log.w(tag, fullMsg)
+            Log.ERROR -> Log.e(tag, fullMsg)
         }
     }
 
-    private static String convertJson(Object... args) {
-        try {
-            StringBuilder stringBuffer = new StringBuilder();
-            if (ConvertUtils.isEmpty(args)) stringBuffer.append("Log incorrect output format");
-            else {
-                int length = args.length;
-                for (int i = 0; i < length; i++) {
-                    Object obj = args[i];
-                    if (ConvertUtils.isEmpty(obj)) {
-                        stringBuffer.append("null");
-                        if (i < length - 1) stringBuffer.append(",");
-                        continue;
-                    }
-                    if (obj instanceof String) stringBuffer.append(obj);
-                    else stringBuffer.append(gson.toJson(obj));
-                    if (i < length - 1) stringBuffer.append(",");
+    private fun convertJson(vararg args: Any?): String {
+        return try {
+            if (args.isEmpty()) return "Log incorrect output format"
+            val sb = StringBuilder()
+            args.forEachIndexed { index, obj ->
+                if (obj == null) {
+                    sb.append("null")
+                } else if (obj is String) {
+                    sb.append(obj)
+                } else {
+                    sb.append(gson.toJson(obj))
                 }
+                if (index < args.size - 1) sb.append(",")
             }
-            return stringBuffer.toString();
-        } catch (Exception e) {
-            return e.toString();
+            sb.toString()
+        } catch (e: Exception) {
+            e.toString()
         }
     }
 
-    private static StringBuffer getMethodName() {
-        StringBuffer stringBuilder = new StringBuffer();
-        StackTraceElement[] traceElements = Thread.currentThread().getStackTrace();
-        int stackOffset = getStackOffset(traceElements);
-        stringBuilder.append("(").append(traceElements[stackOffset].getFileName())
-                .append(":").append(traceElements[stackOffset].getLineNumber())
-                .append(") ").append(traceElements[stackOffset].getMethodName()).append("() -> ");
-        return stringBuilder;
+    // 私有方法 —— 堆栈 =================================================
+
+    /**
+     * 定位调用者方法名。
+     * 过滤：栈采集方法、VMStack、Logger、LogUtils，拿到业务代码栈帧
+     * 例：-> "(MainActivity.kt:42) onCreate() -> "
+     */
+    private fun getMethodName(): String {
+        val elements = Thread.currentThread().stackTrace ?: return ""
+        val stackOffset = getStackOffset(elements)
+        if (stackOffset < 0) return ""
+        val element = elements[stackOffset]
+        return "(${element.fileName}:${element.lineNumber}) ${element.methodName}() -> "
     }
 
-    private static String getCurrentTag() {
-        StackTraceElement[] traceElements = Thread.currentThread().getStackTrace();
-        int stackOffset = getStackOffset(traceElements);
-        stackOffset += 1;
-        return traceElements[stackOffset].getFileName();
-    }
-
-    private static String getDefaultTag() {
-        StackTraceElement[] traceElements = Thread.currentThread().getStackTrace();
-        int stackOffset = getStackOffset(traceElements);
-        return traceElements[stackOffset].getFileName();
-    }
-
-    private static int getStackOffset(StackTraceElement... traceElements) {
-        for (int i = 3; i < traceElements.length; i++) {
-            if (traceElements[i] == null) {
-                continue;
-            }
-            String name = traceElements[i].getClassName();
-            if (ConvertUtils.equalsIgnoreCase(LogUtils.class.getName(), name)
-                    && ConvertUtils.equalsIgnoreCase(Logger.class.getName(), name)) {
-                return i;
+    /**
+     * 找到第一个不在 LogUtils / Logger 内部的栈帧。
+     *
+     * 例：-> 3
+     */
+    private fun getStackOffset(traceElements: Array<StackTraceElement>): Int {
+        val logUtilsClsName = LogUtils::class.java.name
+        val loggerClsName = Logger::class.java.name
+        // 和老Java for(int i=3; i<traceElements.length; i++) 完全一致
+        for (i in 3 until traceElements.size) {
+            val element = traceElements[i] ?: continue
+            val className = element.className
+            // 找到不是日志工具类的栈帧，就是业务调用点
+            if (className != logUtilsClsName && className != loggerClsName) {
+                return i
             }
         }
-        return -1;
-    }
-
-    protected static void printStackTrace(String tag, boolean info) {
-        StackTraceElement[] traceElements = Thread.currentThread().getStackTrace();
-        StringBuilder stackTrace = new StringBuilder();
-        for (StackTraceElement element : traceElements) {
-            if (element != null) {
-                String elementStr = element.toString();
-                if (elementStr.contains("com.sgm")) {
-                    stackTrace.append(elementStr).append("\n");
-                }
-            }
-        }
-        if (info) {
-            info(tag, stackTrace.toString());
-        } else {
-            debug(tag, stackTrace.toString());
-        }
+        return -1
     }
 }

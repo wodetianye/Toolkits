@@ -6,16 +6,19 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /**
- * @Introduce: .
+ * @Introduce: 阻断泄漏.
  * @Author: lvww
  * @Date: 2023/11/21
- * @Description:
+ * @Description: 给敏感字段打上这个注解，控制它在序列化 / 反序列化时是否参与，防止敏感数据被写进 JSON 或被外部 JSON 覆盖
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target({java.lang.annotation.ElementType.FIELD})
 public @interface BurstLeakage {
-    boolean serialize() default true;//默认序列化生效
 
-    boolean deserialize() default true;//默认反序列化生效
+    /** 序列化时是否生效。true 表示包含，false 表示忽略。默认 true。 */
+    boolean serialize() default true;
+
+    /** 反序列化时是否生效。true 表示接受，false 表示忽略。默认 true。 */
+    boolean deserialize() default true;
 }

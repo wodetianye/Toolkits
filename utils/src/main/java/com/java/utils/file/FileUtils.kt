@@ -1,56 +1,70 @@
 package com.java.utils.file
 
+import android.app.Application
 import android.content.Context
-import android.os.Build
-import android.os.Environment
-import android.os.StatFs
 import android.util.Log
 import com.java.utils.BaseUtils
 import java.io.File
 import java.io.FileOutputStream
 import java.io.IOException
+import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
 
 /**
  * @Introduce: 文件操作工具类.
  * @Author: Lww
  * @Date: 2023/10/11
- * @Description: 文件读写、路径检测、文件创建删除、Asset文件拷贝、存储检测等.
+ * @Description: 文件读写、判断、创建删除、Asset 拷贝、大小计算、权限设置等.
+ *               路径获取请使用 [StoragePath]，JSON 解析请使用 [ParseJsonUtils]。
  */
-class FileUtils private constructor() : BaseUtils {
-    private lateinit var mContext: Context;
+object FileUtils : BaseUtils {
 
-    companion object {
-        private const val TAG = "FileUtils"
-        val instance by lazy { FileUtils() }
-    }
+    private const val TAG = "FileUtils"
+
+    private var mApp: Application? = null
 
     override fun initUtils(context: Context) {
-        this.mContext = context.applicationContext
+        mApp = context.applicationContext as Application
     }
 
     override fun unInitUtils() {
-
+        mApp = null
     }
 
-
-    // 1. 文件读写操作
+    private fun requireContext(): Application {
+        return mApp ?: throw IllegalStateException(
+            "FileUtils 未初始化，请先调用 FileUtils.initUtils(context)"
+        )
+    }
+    // 公开方法 —— 读写 =====================================================================
 
     /**
-     * 读取文件内容为字符串
+     * 读取文件内容为字符串。
+     *
+     * 例：readFileToString("/sdcard/a.txt") -> "hello"
      */
-    fun readFileToString(filePath: String): String? {
-        return readFileToString(File(filePath))
-    }
+    @JvmStatic
+    @JvmOverloads
+    fun readFileToString(
+        filePath: String,
+        charset: Charset = StandardCharsets.UTF_8
+    ): String? = readFileToString(File(filePath), charset)
 
-    fun readFileToString(file: File): String? {
-        if (!file.exists()) {
+    /**
+     * 读取文件内容为字符串。
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun readFileToString(
+        file: File,
+        charset: Charset = StandardCharsets.UTF_8
+    ): String? {
+        if (!file.exists() || !file.isFile) {
             Log.e(TAG, "File not exists: ${file.absolutePath}")
             return null
         }
-
         return try {
-            file.readText(StandardCharsets.UTF_8)
+            file.readText(charset)
         } catch (e: IOException) {
             Log.e(TAG, "Read file error: ${e.message}")
             null
@@ -58,24 +72,31 @@ class FileUtils private constructor() : BaseUtils {
     }
 
     /**
-     * 写入字符串到文件
+     * 写入字符串到文件（覆盖）。
+     *
+     * 例：writeStringToFile("hi", "/sdcard/a.txt") -> true
      */
-    fun writeStringToFile(content: String, filePath: String): Boolean {
-        return writeStringToFile(content, File(filePath))
-    }
+    @JvmStatic
+    @JvmOverloads
+    fun writeStringToFile(
+        content: String,
+        filePath: String,
+        charset: Charset = StandardCharsets.UTF_8
+    ): Boolean = writeStringToFile(content, File(filePath), charset)
 
-    fun writeStringToFile(content: String, file: File): Boolean {
-        // 确保父目录存在
-        val parentDir = file.parentFile
-        if (parentDir != null && !parentDir.exists()) {
-            if (!parentDir.mkdirs()) {
-                Log.e(TAG, "Create parent directory failed: ${parentDir.absolutePath}")
-                return false
-            }
-        }
-
+    /**
+     * 写入字符串到文件（覆盖）。
+     */
+    @JvmStatic
+    @JvmOverloads
+    fun writeStringToFile(
+        content: String,
+        file: File,
+        charset: Charset = StandardCharsets.UTF_8
+    ): Boolean {
+        if (!ensureParentDir(file)) return false
         return try {
-            file.writeText(content, StandardCharsets.UTF_8)
+            file.writeText(content, charset)
             true
         } catch (e: IOException) {
             Log.e(TAG, "Write file error: ${e.message}")
@@ -84,21 +105,21 @@ class FileUtils private constructor() : BaseUtils {
     }
 
     /**
-     * 追加内容到文件
+     * 追加内容到文件。
+     *
+     * 例：appendStringToFile("hi", "/sdcard/a.txt") -> true
      */
-    fun appendStringToFile(content: String, filePath: String): Boolean {
+    @JvmStatic
+    @JvmOverloads
+    fun appendStringToFile(
+        content: String,
+        filePath: String,
+        charset: Charset = StandardCharsets.UTF_8
+    ): Boolean {
         val file = File(filePath)
-        // 确保父目录存在
-        val parentDir = file.parentFile
-        if (parentDir != null && !parentDir.exists()) {
-            if (!parentDir.mkdirs()) {
-                Log.e(TAG, "Create parent directory failed: ${parentDir.absolutePath}")
-                return false
-            }
-        }
-
+        if (!ensureParentDir(file)) return false
         return try {
-            file.appendText(content, StandardCharsets.UTF_8)
+            file.appendText(content, charset)
             true
         } catch (e: IOException) {
             Log.e(TAG, "Append file error: ${e.message}")
@@ -106,51 +127,41 @@ class FileUtils private constructor() : BaseUtils {
         }
     }
 
-    // 2. 文件路径检测是否存在
+    // 公开方法 —— 判断 =====================================================================
 
-    /**
-     * 检测文件或目录是否存在
-     */
-    fun isPathExists(path: String): Boolean {
-        return path.isNotEmpty() && File(path).exists()
+    /** 路径是否存在。 */
+    @JvmStatic
+    fun isPathExists(path: String?): Boolean =
+        !path.isNullOrEmpty() && File(path).exists()
+
+    /** 是否是文件。 */
+    @JvmStatic
+    fun isFile(path: String?): Boolean {
+        if (path.isNullOrEmpty()) return false
+        val f = File(path)
+        return f.exists() && f.isFile
     }
 
-    /**
-     * 检测是否是文件
-     */
-    fun isFile(path: String): Boolean {
-        val file = File(path)
-        return file.exists() && file.isFile
+    /** 是否是目录。 */
+    @JvmStatic
+    fun isDirectory(path: String?): Boolean {
+        if (path.isNullOrEmpty()) return false
+        val f = File(path)
+        return f.exists() && f.isDirectory
     }
 
-    /**
-     * 检测是否是目录
-     */
-    fun isDirectory(path: String): Boolean {
-        val file = File(path)
-        return file.exists() && file.isDirectory
-    }
-
-    // 3. 文件创建及删除
+    // 公开方法 —— 创建 / 删除 =====================================================================
 
     /**
-     * 创建文件
+     * 创建文件（父目录不存在会自动创建）。
+     *
+     * 例：createFile("/sdcard/a.txt") -> true
      */
+    @JvmStatic
     fun createFile(filePath: String): Boolean {
         val file = File(filePath)
-        if (file.exists()) {
-            return true
-        }
-
-        // 确保父目录存在
-        val parentDir = file.parentFile
-        if (parentDir != null && !parentDir.exists()) {
-            if (!parentDir.mkdirs()) {
-                Log.e(TAG, "Create parent directory failed: ${parentDir.absolutePath}")
-                return false
-            }
-        }
-
+        if (file.exists()) return file.isFile
+        if (!ensureParentDir(file)) return false
         return try {
             file.createNewFile()
         } catch (e: IOException) {
@@ -160,57 +171,76 @@ class FileUtils private constructor() : BaseUtils {
     }
 
     /**
-     * 创建目录
+     * 创建目录（支持多级）。
+     *
+     * 例：createDirectory("/sdcard/dir") -> true
      */
+    @JvmStatic
     fun createDirectory(dirPath: String): Boolean {
         val dir = File(dirPath)
-        return if (dir.exists()) {
-            dir.isDirectory
-        } else {
-            dir.mkdirs()
-        }
+        return if (dir.exists()) dir.isDirectory else dir.mkdirs()
     }
 
     /**
-     * 删除文件
+     * 删除文件（不存在返回 true）。
+     *
+     * 例：deleteFile("/sdcard/a.txt") -> true
      */
+    @JvmStatic
     fun deleteFile(filePath: String): Boolean {
         val file = File(filePath)
-        return if (!file.exists()) {
-            true
-        } else {
-            file.delete()
-        }
+        return !file.exists() || file.delete()
     }
 
     /**
-     * 删除目录及其所有内容
+     * 删除目录及其所有内容。
+     *
+     * 例：deleteDirectory("/sdcard/dir") -> true
      */
+    @JvmStatic
     fun deleteDirectory(dirPath: String): Boolean {
         val dir = File(dirPath)
-        if (!dir.exists() || !dir.isDirectory()) {
-            return false
-        }
-
+        if (!dir.exists() || !dir.isDirectory) return false
         dir.listFiles()?.forEach { file ->
-            if (file.isDirectory) {
-                deleteDirectory(file.absolutePath)
-            } else {
-                file.delete()
-            }
+            if (file.isDirectory) deleteDirectory(file.absolutePath) else file.delete()
         }
         return dir.delete()
     }
 
-    // 4. Asset文件拷贝到内存卡
+    /**
+     * 删除目录下所有内容，保留目录本身。
+     *
+     * 例：deleteAllFilesInDirectory("/sdcard/dir") -> true
+     */
+    @JvmStatic
+    fun deleteAllFilesInDirectory(dirPath: String): Boolean {
+        val dir = File(dirPath)
+        if (!dir.exists() || !dir.isDirectory) return false
+        var success = true
+        dir.listFiles()?.forEach { file ->
+            success = if (file.isDirectory) {
+                success && deleteDirectory(file.absolutePath)
+            } else {
+                success && file.delete()
+            }
+        }
+        return success
+    }
+
+    // 公开方法 —— Asset 拷贝 =====================================================================
 
     /**
-     * 拷贝Asset文件到指定路径
+     * 拷贝 Asset 文件到指定路径。
+     *
+     * 例：copyAssetToStorage("config.json", "/sdcard/config.json") -> true
      */
+    @JvmStatic
     fun copyAssetToStorage(assetFileName: String, destPath: String): Boolean {
         return try {
-            mContext.assets.open(assetFileName).use { input ->
-                FileOutputStream(destPath).use { output ->
+            val destFile = File(destPath)
+            if (!ensureParentDir(destFile)) return false
+            requireContext().assets.open(assetFileName).use { input ->
+                FileOutputStream(destFile).use { output ->
                     input.copyTo(output)
                 }
             }
@@ -222,24 +252,19 @@ class FileUtils private constructor() : BaseUtils {
     }
 
     /**
-     * 拷贝Asset文件夹到指定目录
+     * 拷贝 Asset 文件夹到指定目录（递归）。
+     *
+     * 例：copyAssetFolderToStorage("config", "/sdcard/config") -> true
      */
+    @JvmStatic
     fun copyAssetFolderToStorage(assetFolder: String, destDir: String): Boolean {
         return try {
-            // 创建目标目录
             createDirectory(destDir)
-
-            // 获取asset文件夹下的所有文件
-            val files = mContext.assets.list(assetFolder)
-            if (files.isNullOrEmpty()) {
-                return false
-            }
-
+            val files = requireContext().assets.list(assetFolder)
+            if (files.isNullOrEmpty()) return false
             files.forEach { file ->
                 val assetPath = "$assetFolder${File.separator}$file"
                 val destPath = "$destDir${File.separator}$file"
-
-                // 如果是子文件夹，递归拷贝
                 if (isAssetDirectory(assetPath)) {
                     copyAssetFolderToStorage(assetPath, destPath)
                 } else {
@@ -253,219 +278,62 @@ class FileUtils private constructor() : BaseUtils {
         }
     }
 
-    /**
-     * 检测Asset路径是否是目录
-     */
-    private fun isAssetDirectory(assetPath: String): Boolean {
-        return try {
-            val files = mContext.assets.list(assetPath)
-            !files.isNullOrEmpty()
-        } catch (e: IOException) {
-            false
-        }
-    }
-
-    // 5. 存储分区是否可用检测
+    // 公开方法 —— 大小 =====================================================================
 
     /**
-     * 检测外部存储是否可用
+     * 获取文件或目录大小（字节）。
+     *
+     * 例：getFileSize("/sdcard/dir") -> 102400L
      */
-    fun isExternalStorageAvailable(): Boolean {
-        return Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED
-    }
+    @JvmStatic
+    fun getFileSize(path: String): Long = getFileSize(File(path))
 
     /**
-     * 检测外部存储是否可写
+     * 获取格式化后的文件大小。
+     *
+     * 例：getFormattedFileSize("/sdcard/dir") -> "100.00 KB"
      */
-    fun isExternalStorageWritable(): Boolean {
-        return Environment.getExternalStorageState() == Environment.MEDIA_MOUNTED
-    }
+    @JvmStatic
+    fun getFormattedFileSize(path: String): String = formatFileSize(getFileSize(path))
 
     /**
-     * 检测外部存储是否可读
+     * 获取目录下所有文件（递归）。
+     *
+     * 例：getAllFilesInDirectory("/sdcard/dir") -> List<File>
      */
-    fun isExternalStorageReadable(): Boolean {
-        val state = Environment.getExternalStorageState()
-        return state == Environment.MEDIA_MOUNTED || state == Environment.MEDIA_MOUNTED_READ_ONLY
-    }
-
-    /**
-     * 获取可用存储空间大小（字节）
-     */
-    fun getAvailableStorageSize(path: String): Long {
-        return try {
-            val stat = StatFs(path)
-            val blockSize: Long
-            val availableBlocks: Long
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR2) {
-                blockSize = stat.blockSizeLong
-                availableBlocks = stat.availableBlocksLong
-            } else {
-                @Suppress("DEPRECATION")
-                blockSize = stat.blockSize.toLong()
-                @Suppress("DEPRECATION")
-                availableBlocks = stat.availableBlocks.toLong()
-            }
-
-            availableBlocks * blockSize
-        } catch (e: Exception) {
-            Log.e(TAG, "Get available storage size error: ${e.message}")
-            -1
-        }
-    }
-
-    // 6. 获取存储分区路径获取
-
-    /**
-     * 获取外部存储根目录
-     */
-    fun getExternalStoragePath(): String {
-        return Environment.getExternalStorageDirectory().absolutePath
-    }
-
-    /**
-     * 获取应用内部存储目录
-     */
-    fun getInternalStoragePath(): String {
-        return mContext.filesDir.absolutePath
-    }
-
-    /**
-     * 获取应用缓存目录
-     */
-    fun getCacheStoragePath(): String {
-        return mContext.cacheDir.absolutePath
-    }
-
-    /**
-     * 获取外部存储中的应用私有目录
-     */
-    fun getExternalFilesDirPath(): String {
-        return mContext.getExternalFilesDir(null)?.absolutePath ?: ""
-    }
-
-    /**
-     * 获取外部存储中的应用缓存目录
-     */
-    fun getExternalCacheDirPath(): String {
-        return mContext.externalCacheDir?.absolutePath ?: ""
-    }
-
-    // 7. 获取指定文件路径下的总文件大小
-
-    /**
-     * 获取文件或目录大小（字节）
-     */
-    fun getFileSize(path: String): Long {
-        return getFileSize(File(path))
-    }
-
-    private fun getFileSize(file: File): Long {
-        if (!file.exists()) {
-            return 0
-        }
-
-        return if (file.isFile) {
-            file.length()
-        } else {
-            var size = 0L
-            file.listFiles()?.forEach { f ->
-                size += getFileSize(f)
-            }
-            size
-        }
-    }
-
-    /**
-     * 获取格式化后的文件大小
-     */
-    fun getFormattedFileSize(path: String): String {
-        val size = getFileSize(path)
-        return formatFileSize(size)
-    }
-
-    private fun formatFileSize(size: Long): String {
-        if (size <= 0) return "0 B"
-
-        val units = arrayOf("B", "KB", "MB", "GB", "TB")
-        val digitGroups = (Math.log10(size.toDouble()) / Math.log10(1024.0)).toInt()
-
-        return "%.2f %s".format(size / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
-    }
-
-    // 8. 删除文件夹下所有文件
-
-    /**
-     * 删除文件夹下所有文件，但不删除文件夹本身
-     */
-    fun deleteAllFilesInDirectory(dirPath: String): Boolean {
-        val dir = File(dirPath)
-        if (!dir.exists() || !dir.isDirectory) {
-            return false
-        }
-
-        var success = true
-        dir.listFiles()?.forEach { file ->
-            success = if (file.isDirectory) {
-                success && deleteDirectory(file.absolutePath)
-            } else {
-                success && file.delete()
-            }
-        }
-        return success
-    }
-
-    /**
-     * 获取目录下所有文件列表
-     */
+    @JvmStatic
     fun getAllFilesInDirectory(dirPath: String): List<File> {
-        val fileList = mutableListOf<File>()
+        val result = mutableListOf<File>()
         val dir = File(dirPath)
-
-        if (!dir.exists() || !dir.isDirectory) {
-            return fileList
-        }
-
-        getAllFiles(dir, fileList)
-        return fileList
+        if (!dir.exists() || !dir.isDirectory) return result
+        collectAllFiles(dir, result)
+        return result
     }
 
-    private fun getAllFiles(dir: File, fileList: MutableList<File>) {
-        dir.listFiles()?.forEach { file ->
-            if (file.isFile) {
-                fileList.add(file)
-            } else if (file.isDirectory) {
-                getAllFiles(file, fileList)
-            }
-        }
-    }
-
-    // 9. 设置文件夹权限为777
+    // 公开方法 —— 权限 =====================================================================
 
     /**
-     * 设置文件或目录权限为777
+     * 设置文件或目录权限为 777（递归）。
+     *
+     * 例：setFullPermissions("/sdcard/dir") -> true
+     *
+     * 注意：Linux 权限模型下 777 表示所有用户可读写执行。
+     * 出于安全考虑，非必要不建议使用。
      */
+    @JvmStatic
     fun setFullPermissions(path: String): Boolean {
         return try {
             val file = File(path)
-            if (!file.exists()) {
-                return false
-            }
-
-            // 设置读、写、执行权限给所有者、组和其他用户
+            if (!file.exists()) return false
             var success = true
-            success = success && file.setReadable(true, false)  // 所有用户可读
-            success = success && file.setWritable(true, false)  // 所有用户可写
-            success = success && file.setExecutable(true, false) // 所有用户可执行
-
-            // 如果是目录，递归设置子文件和子目录权限
+            success = success && file.setReadable(true, false)
+            success = success && file.setWritable(true, false)
+            success = success && file.setExecutable(true, false)
             if (file.isDirectory) {
                 file.listFiles()?.forEach { child ->
                     success = success && setFullPermissions(child.absolutePath)
                 }
             }
-
             success
         } catch (e: Exception) {
             Log.e(TAG, "Set full permissions error: ${e.message}")
@@ -474,8 +342,11 @@ class FileUtils private constructor() : BaseUtils {
     }
 
     /**
-     * 设置文件权限（更细粒度的控制）
+     * 设置文件权限（细粒度）。
+     *
+     * 例：setFilePermissions("/sdcard/a.txt", true, true, false) -> true
      */
+    @JvmStatic
     fun setFilePermissions(
         path: String,
         readable: Boolean,
@@ -484,15 +355,11 @@ class FileUtils private constructor() : BaseUtils {
     ): Boolean {
         return try {
             val file = File(path)
-            if (!file.exists()) {
-                return false
-            }
-
+            if (!file.exists()) return false
             var success = true
             success = success && file.setReadable(readable, false)
             success = success && file.setWritable(writable, false)
             success = success && file.setExecutable(executable, false)
-
             success
         } catch (e: Exception) {
             Log.e(TAG, "Set file permissions error: ${e.message}")
@@ -501,77 +368,69 @@ class FileUtils private constructor() : BaseUtils {
     }
 
     /**
-     * 获取文件权限信息
+     * 获取文件权限字符串，例如 "rwx" / "rw-"。
+     *
+     * 例：getFilePermissions("/sdcard/a.txt") -> "rw-"
      */
+    @JvmStatic
     fun getFilePermissions(path: String): String {
         val file = File(path)
-        if (!file.exists()) {
-            return "File not exists"
-        }
-
-        val permissions = StringBuilder()
-        permissions.append(if (file.canRead()) "r" else "-")
-        permissions.append(if (file.canWrite()) "w" else "-")
-        permissions.append(if (file.canExecute()) "x" else "-")
-
-        return permissions.toString()
-    }
-
-    // 扩展函数：为File类添加扩展函数
-
-    /**
-     * 扩展函数：安全地读取文件内容
-     */
-    fun File.readTextSafely(charset: java.nio.charset.Charset = StandardCharsets.UTF_8): String? {
-        return try {
-            if (exists()) readText(charset) else null
-        } catch (e: IOException) {
-            Log.e(TAG, "Read file error: ${e.message}")
-            null
+        if (!file.exists()) return "File not exists"
+        return buildString {
+            append(if (file.canRead()) "r" else "-")
+            append(if (file.canWrite()) "w" else "-")
+            append(if (file.canExecute()) "x" else "-")
         }
     }
 
+    // 公开方法 —— 格式化（顶层扩展函数也复用这里） =====================================================================
+
     /**
-     * 扩展函数：安全地写入文件内容
+     * 字节大小 → 易读字符串。
+     *
+     * 例：formatFileSize(102400L) -> "100.00 KB"
      */
-    fun File.writeTextSafely(
-        text: String,
-        charset: java.nio.charset.Charset = StandardCharsets.UTF_8
-    ): Boolean {
+    @JvmStatic
+    fun formatFileSize(size: Long): String {
+        if (size <= 0) return "0 B"
+        val units = arrayOf("B", "KB", "MB", "GB", "TB")
+        val digitGroups = (Math.log10(size.toDouble()) / Math.log10(1024.0)).toInt()
+            .coerceIn(0, units.size - 1)
+        return "%.2f %s".format(
+            size / Math.pow(1024.0, digitGroups.toDouble()),
+            units[digitGroups]
+        )
+    }
+
+    /** 确保父目录存在。 */
+    private fun ensureParentDir(file: File): Boolean {
+        val parent = file.parentFile ?: return true
+        if (parent.exists()) return true
+        if (parent.mkdirs()) return true
+        Log.e(TAG, "Create parent directory failed: ${parent.absolutePath}")
+        return false
+    }
+
+    private fun getFileSize(file: File): Long {
+        if (!file.exists()) return 0
+        if (file.isFile) return file.length()
+        var size = 0L
+        file.listFiles()?.forEach { size += getFileSize(it) }
+        return size
+    }
+
+    private fun collectAllFiles(dir: File, result: MutableList<File>) {
+        dir.listFiles()?.forEach { file ->
+            if (file.isFile) result.add(file)
+            else if (file.isDirectory) collectAllFiles(file, result)
+        }
+    }
+
+    private fun isAssetDirectory(assetPath: String): Boolean {
         return try {
-            // 确保父目录存在
-            parentFile?.mkdirs()
-            writeText(text, charset)
-            true
+            !requireContext().assets.list(assetPath).isNullOrEmpty()
         } catch (e: IOException) {
-            Log.e(TAG, "Write file error: ${e.message}")
             false
         }
     }
-
-    /**
-     * 扩展函数：递归计算文件大小
-     */
-    val File.recursiveSize: Long
-        get() = getFileSize(this)
-}
-
-// 顶层扩展函数
-/**
- * 将字节大小格式化为易读的字符串
- */
-fun Long.formatFileSize(): String {
-    if (this <= 0) return "0 B"
-
-    val units = arrayOf("B", "KB", "MB", "GB", "TB")
-    val digitGroups = (Math.log10(toDouble()) / Math.log10(1024.0)).toInt()
-
-    return "%.2f %s".format(this / Math.pow(1024.0, digitGroups.toDouble()), units[digitGroups])
-}
-
-/**
- * 检查路径是否存在
- */
-fun String?.isPathExists(): Boolean {
-    return !this.isNullOrEmpty() && File(this).exists()
 }

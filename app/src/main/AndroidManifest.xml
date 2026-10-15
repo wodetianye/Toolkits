@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <application
+        android:name=".App"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -20,6 +21,19 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <activity android:name="com.java.utils.ToastTestActivity" />
+        <activity android:name="com.java.utils.TimeTestActivity" />
+        <activity android:name="com.java.utils.ScreenTestActivity" />
+        <activity android:name="com.java.utils.ViewTestActivity" />
+        <activity android:name="com.java.utils.BitmapTestActivity" />
+        <activity android:name="com.java.utils.ConvertTestActivity" />
+        <activity android:name="com.java.utils.NetworkTestActivity" />
+        <activity android:name="com.java.utils.ResourceTestActivity" />
+        <activity android:name="com.java.utils.FileTestActivity" />
+        <activity android:name="com.java.utils.GsonTestActivity" />
+        <activity android:name="com.java.utils.LoggerTestActivity" />
+        <activity android:name="com.java.utils.ThreadTestActivity" />
     </application>
 
 </manifest>
